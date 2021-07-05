@@ -1,9 +1,4 @@
-all: 
-	mkdir build
-	cd build; cmake ..
-	cd build/main; make
-	./build/main/LuaTutorial
-	rm -rf build
+all: build_and_run clean
 
 build:
 	mkdir build

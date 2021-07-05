@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.7)
 project( LuaTutorial )
 
 add_compile_options(-W -Wall -Werror) #All Warnings, all warnings are errors
-
+set (CMAKE_CXX_STANDARD 11)
 # source for the test executable
 set  (LUA_TUTORIAL_SOURCES
 		"main.cpp" )		
