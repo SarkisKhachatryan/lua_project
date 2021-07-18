@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <functional>
+#include <string.h>
 #include "lua.hpp"
 
 //declare number in lua get it via stack and print it
@@ -146,19 +147,152 @@ int native_function_call(){
     lua_close(L);
 }
 
-int main() {
-    std::vector<std::function<int()>> functions;
-    functions.push_back(print_basic_number);
-    functions.push_back(lua_stack_play);
-    functions.push_back(lua_function_call);
-    functions.push_back(native_function_call);
-    int error_code;
-    for (size_t i = 0; i < functions.size(); i++) {
-        error_code = functions.at(i)();
-        if (error_code != 0) {
-            return error_code;
+//creating user data in c which then passed to lua vi stack and allocated ther, then 
+//members and function is set on lua side
+int user_date_creation() {
+    struct Point {
+        int x;
+        int y;
+
+        void mul(int num) {
+            x *= num;
+            y *= num;
         }
-        
+    };
+
+    auto createObject = [](lua_State* L) -> int {
+        Point *objPtr = static_cast<Point*>(lua_newuserdata(L, sizeof(Point)));
+        objPtr->x = 1;
+        objPtr->y = 2;
+        return 1;
+    };
+
+    auto mulObject = [](lua_State* L) -> int {
+        Point* obj = static_cast<Point*>(lua_touserdata(L, -2));
+        lua_Number num = lua_tonumber(L, -1);
+        obj->mul(num);
+
+        return 1;
+    };
+
+    const char* script_1 = R"(
+    obj = createObject()
+    )";
+
+    const char* script_2 = R"(
+    mul_obj(obj, 5)
+    )";
+
+    lua_State* L = luaL_newstate();
+    lua_pushcfunction(L, createObject);
+    lua_setglobal(L, "createObject");
+    luaL_dostring(L, script_1);
+    lua_getglobal(L, "obj");
+    if (lua_isuserdata(L, -1)) {
+        Point* obj = static_cast<Point*>(lua_touserdata(L, -1));
+        int expected_x = 1;
+        int expected_y = 2;
+        auto x = obj->x;
+        auto y = obj->y;
+
+        if(expected_x != x || expected_y != y) {
+            std::cerr << "Error on: " << __LINE__ << " wrong value was set " << std::endl;
+            return 2;
+        }
+        lua_pushcfunction(L, mulObject);
+        lua_setglobal(L, "mul_obj");
+        luaL_dostring(L, script_2);
+        lua_getglobal(L, "obj");
+        if (lua_isuserdata(L, -1)) {
+            Point* obj = static_cast<Point*>(lua_touserdata(L, -1));
+            expected_x *= 5;
+            expected_y *= 5;
+            auto x = obj->x;
+            auto y = obj->y;
+
+            if(expected_x != x || expected_y != y) {
+                std::cerr << "Error on: " << __LINE__ << " wrong value was set " << std::endl;
+                return 4;
+            }
+        } else {
+            std::cerr << "Error on: " << __LINE__ << " not user data where provided " << std::endl;
+            return 3;
+        }
+    } else {
+        std::cerr << "Error on: " << __LINE__ << " not user data where provided " << std::endl;
+        return 1;
     }
+
+    lua_close(L);
     return 0;
+}
+
+//creating table geting it's value and setting new key-value
+int table_creation() {
+    lua_State* L = luaL_newstate();
+
+    const char* script_1 = R"(
+    t = { one = "true", two = "false"}
+    )";
+    luaL_dostring(L, script_1);
+    lua_getglobal(L, "t");
+    if(!lua_istable(L, -1)) {
+        std::cerr << "Error on: " << __LINE__ << " not a table provided " << std::endl;
+        return 1;
+    }
+
+    lua_pushstring(L, "one");
+    lua_gettable(L, -2);
+
+    const char* onePtr = lua_tostring(L, -1);
+    const char* one_expected = {"true\0"};
+    if(strcmp(onePtr, one_expected) != 0) {
+        std::cerr << "Error on: " << __LINE__ << " not correc value set in table as value " << std::endl;
+        return 2;
+    }
+
+    lua_getglobal(L, "t");
+    lua_getfield(L, -1, "two");
+    const char* twoPtr = lua_tostring(L, -1);
+    const char* two_expected = {"false\0"};
+    if(strcmp(twoPtr, two_expected) != 0) {
+        std::cerr << "Error on: " << __LINE__ << " not correc value set in table as value " << std::endl;
+        return 3;
+    }
+
+    lua_getglobal(L, "t");
+    lua_pushstring(L, "true");
+    lua_setfield(L, -2, "three");
+
+    lua_getglobal(L, "t");
+    lua_getfield(L, -1, "three");
+    const char* threePtr = lua_tostring(L, -1);
+    const char* three_expected = {"true\0"};
+    if(strcmp(threePtr, three_expected) != 0) {
+        std::cerr << "Error on: " << __LINE__ << " not correc value set in table as value " << std::endl;
+        return 3;
+    }
+
+    lua_close(L);
+    return 0;
+}
+
+int main() {
+    // std::vector<std::function<int()>> functions;
+    // functions.push_back(print_basic_number);
+    // functions.push_back(lua_stack_play);
+    // functions.push_back(lua_function_call);
+    // functions.push_back(native_function_call);
+    // functions.push_back(user_date_creation);
+    // functions.push_back(table_creation);
+
+    // int error_code;
+    // for (size_t i = 0; i < functions.size(); i++) {
+    //     error_code = functions.at(i)();
+    //     if (error_code != 0) {
+    //         return error_code;
+    //     }
+    // }
+
+    // return 0;
 }
